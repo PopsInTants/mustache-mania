@@ -14,10 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      mustaches: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string
+          submitter_name: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url: string
+          submitter_name?: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string
+          submitter_name?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      ratings: {
+        Row: {
+          created_at: string
+          id: string
+          mustache_id: string
+          score: number
+          voter_ip: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mustache_id: string
+          score: number
+          voter_ip: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mustache_id?: string
+          score?: number
+          voter_ip?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ratings_mustache_id_fkey"
+            columns: ["mustache_id"]
+            isOneToOne: false
+            referencedRelation: "mustache_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_mustache_id_fkey"
+            columns: ["mustache_id"]
+            isOneToOne: false
+            referencedRelation: "mustaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      mustache_stats: {
+        Row: {
+          avg_rating: number | null
+          created_at: string | null
+          id: string | null
+          image_url: string | null
+          submitter_name: string | null
+          title: string | null
+          total_ratings: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
