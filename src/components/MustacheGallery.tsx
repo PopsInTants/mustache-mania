@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MustacheCard } from "./MustacheCard";
 
@@ -14,58 +15,60 @@ interface MustacheStat {
 
 type SortMode = "recent" | "top" | "most_rated";
 
-export function MustacheGallery({ refreshKey }: { refreshKey: number }) {
-  const [mustaches, setMustaches] = useState<MustacheStat[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sort, setSort] = useState<SortMode>("recent");
+async function fetchMustaches(sort: SortMode): Promise<MustacheStat[]> {
+  const { data, error } = await supabase
+    .from("mustache_stats")
+    .select("*")
+    .limit(50);
 
-  const rotations = [2, -1, 3, -2, 1, -3];
+  if (error) throw error;
 
-  async function fetchMustaches() {
-    setLoading(true);
-    const { data, error } = await supabase.from("mustache_stats").select("*");
+  const items = (data || []).map((d) => ({
+    id: d.id!,
+    title: d.title!,
+    submitter_name: d.submitter_name!,
+    image_url: d.image_url!,
+    avg_rating: d.avg_rating ?? 0,
+    total_ratings: d.total_ratings ?? 0,
+    created_at: d.created_at!,
+  }));
 
-    if (error) {
-      console.error("Fetch error:", error);
-      setLoading(false);
-      return;
-    }
-
-    const items = (data || []).map((d) => ({
-      id: d.id!,
-      title: d.title!,
-      submitter_name: d.submitter_name!,
-      image_url: d.image_url!,
-      avg_rating: d.avg_rating ?? 0,
-      total_ratings: d.total_ratings ?? 0,
-      created_at: d.created_at!,
-    }));
-
-    // Sort
-    if (sort === "top") {
-      items.sort((a, b) => b.avg_rating - a.avg_rating);
-    } else if (sort === "most_rated") {
-      items.sort((a, b) => b.total_ratings - a.total_ratings);
-    } else {
-      items.sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-    }
-
-    setMustaches(items);
-    setLoading(false);
+  if (sort === "top") {
+    items.sort((a, b) => b.avg_rating - a.avg_rating);
+  } else if (sort === "most_rated") {
+    items.sort((a, b) => b.total_ratings - a.total_ratings);
+  } else {
+    items.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }
 
-  useEffect(() => {
-    fetchMustaches();
-  }, [sort, refreshKey]);
+  return items;
+}
+
+export function MustacheGallery({ refreshKey }: { refreshKey: number }) {
+  const [sort, setSort] = useState<SortMode>("recent");
+  const queryClient = useQueryClient();
+
+  const { data: mustaches = [], isLoading } = useQuery({
+    queryKey: ["mustaches", sort, refreshKey],
+    queryFn: () => fetchMustaches(sort),
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+
+  const rotations = [2, -1, 3, -2, 1, -3];
 
   const sortOptions: { key: SortMode; label: string }[] = [
     { key: "recent", label: "FRESH MEAT" },
     { key: "top", label: "HIGHEST RATED" },
     { key: "most_rated", label: "MOST BATTLES" },
   ];
+
+  const handleRated = () => {
+    queryClient.invalidateQueries({ queryKey: ["mustaches"] });
+  };
 
   return (
     <section>
@@ -90,7 +93,7 @@ export function MustacheGallery({ refreshKey }: { refreshKey: number }) {
         </div>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
           {Array.from({ length: 4 }).map((_, i) => (
             <div
@@ -119,7 +122,7 @@ export function MustacheGallery({ refreshKey }: { refreshKey: number }) {
               key={m.id}
               {...m}
               rotation={rotations[i % rotations.length]}
-              onRated={fetchMustaches}
+              onRated={handleRated}
             />
           ))}
         </div>
