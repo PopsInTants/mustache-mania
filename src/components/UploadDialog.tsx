@@ -96,6 +96,8 @@ export function UploadDialog({ onUploaded }: UploadDialogProps) {
                 <img
                   src={preview}
                   alt="Preview"
+                  width={400}
+                  height={400}
                   className="w-full h-full object-cover"
                 />
                 <button
