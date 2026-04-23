@@ -12,6 +12,26 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, X, Image } from "lucide-react";
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+async function detectImageType(file: File): Promise<string | null> {
+  const buf = await file.slice(0, 12).arrayBuffer();
+  const b = new Uint8Array(buf);
+  // JPEG: FF D8 FF
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  // PNG: 89 50 4E 47
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  // GIF: 47 49 46
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif";
+  // WEBP: RIFF....WEBP
+  if (
+    b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+    b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50
+  ) return "image/webp";
+  return null;
+}
+
 interface UploadDialogProps {
   onUploaded: () => void;
 }
@@ -23,11 +43,27 @@ export function UploadDialog({ onUploaded }: UploadDialogProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    setError(null);
     const f = e.target.files?.[0];
     if (!f) return;
+
+    if (f.size > MAX_FILE_SIZE) {
+      setError("File too large. Maximum size is 5MB.");
+      e.target.value = "";
+      return;
+    }
+
+    const detected = await detectImageType(f);
+    if (!detected || !ALLOWED_MIME_TYPES.includes(detected)) {
+      setError("Invalid file. Only JPEG, PNG, GIF, or WEBP images are allowed.");
+      e.target.value = "";
+      return;
+    }
+
     setFile(f);
     setPreview(URL.createObjectURL(f));
   }
@@ -36,14 +72,32 @@ export function UploadDialog({ onUploaded }: UploadDialogProps) {
     e.preventDefault();
     if (!file || !title.trim()) return;
 
+    setError(null);
+
+    // Backstop guards before upload
+    if (file.size > MAX_FILE_SIZE) {
+      setError("File too large. Maximum size is 5MB.");
+      return;
+    }
+    const detected = await detectImageType(file);
+    if (!detected || !ALLOWED_MIME_TYPES.includes(detected)) {
+      setError("Invalid file. Only JPEG, PNG, GIF, or WEBP images are allowed.");
+      return;
+    }
+
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop();
-      const path = `${crypto.randomUUID()}.${ext}`;
+      const extMap: Record<string, string> = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "image/webp": "webp",
+      };
+      const path = `${crypto.randomUUID()}.${extMap[detected]}`;
 
       const { error: uploadError } = await supabase.storage
         .from("mustache-uploads")
-        .upload(path, file);
+        .upload(path, file, { contentType: detected });
 
       if (uploadError) throw uploadError;
 
@@ -67,6 +121,7 @@ export function UploadDialog({ onUploaded }: UploadDialogProps) {
       onUploaded();
     } catch (err) {
       console.error("Upload failed:", err);
+      setError("Upload failed. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -128,6 +183,15 @@ export function UploadDialog({ onUploaded }: UploadDialogProps) {
               onChange={handleFile}
             />
           </div>
+
+          {error && (
+            <div
+              role="alert"
+              className="border-2 border-vinyl-black bg-hot-pink text-sticker-white p-3 text-xs font-bold uppercase tracking-widest"
+            >
+              {error}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label className="text-xs font-bold uppercase tracking-widest text-vinyl-black">
