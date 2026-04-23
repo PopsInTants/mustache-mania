@@ -121,6 +121,7 @@ export function UploadDialog({ onUploaded }: UploadDialogProps) {
       onUploaded();
     } catch (err) {
       console.error("Upload failed:", err);
+      setError("Upload failed. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -182,6 +183,15 @@ export function UploadDialog({ onUploaded }: UploadDialogProps) {
               onChange={handleFile}
             />
           </div>
+
+          {error && (
+            <div
+              role="alert"
+              className="border-2 border-vinyl-black bg-hot-pink text-sticker-white p-3 text-xs font-bold uppercase tracking-widest"
+            >
+              {error}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label className="text-xs font-bold uppercase tracking-widest text-vinyl-black">
